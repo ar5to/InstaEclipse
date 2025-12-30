@@ -39,20 +39,21 @@ import ps.reso.instaeclipse.utils.feature.FeatureManager;
 
 @SuppressLint("UnsafeDynamicallyLoadedCode")
 public class Module implements IXposedHookLoadPackage, IXposedHookZygoteInit {
-    // List of supported Instagram package names
-    private static final List<String> SUPPORTED_PACKAGES = Arrays.asList(CommonUtils.IG_PACKAGE_NAME, // Original package name
-            "com.instagram.android", "com.instagold.android", "com.instaflux.app", "com.myinsta.android", "cc.honista.app", "com.instaprime.android", "com.instafel.android", "com.instadm.android", "com.dfistagram.android", "com.Instander.android", "com.aero.instagram", "com.instapro.android", "com.instaflow.android", "com.instagram1.android", "com.instagram2.android", "com.instagramclone.android", "com.instaclone.android");
+    
+    // We keep this list just in case there is a package WITHOUT "insta" in its name
+    private static final List<String> SUPPORTED_PACKAGES = Arrays.asList(CommonUtils.IG_PACKAGE_NAME,
+            "com.instagram.android", "com.instagold.android", "com.instaflux.app", 
+            "com.myinsta.android", "cc.honista.app", "com.instaprime.android", 
+            "com.instafel.android", "com.instadm.android", "com.dfistagram.android", 
+            "com.Instander.android", "com.aero.instagram", "com.instapro.android", 
+            "com.instaflow.android", "com.instagram1.android", "com.instagram2.android", 
+            "com.instagramclone.android", "com.instaclone.android");
+
     public static DexKitBridge dexKitBridge;
     public static ClassLoader hostClassLoader;
     private static String moduleSourceDir;
     private static String moduleLibDir;
 
-    // for dev usage
-    /*
-    public static void showToast(final String text) {
-        new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(AndroidAppHelper.currentApplication().getApplicationContext(), text, Toast.LENGTH_LONG).show());
-    }
-    */
 
     @Override
     public void initZygote(StartupParam startupParam) {
@@ -79,45 +80,37 @@ public class Module implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) {
-        // Ensure preferences are loaded
+        
+        // XposedBridge.log("(InstaEclipse): Loaded package: " + lpparam.packageName);
 
-
-        XposedBridge.log("(InstaEclipse): Loaded package: " + lpparam.packageName);
-
-        // Hook into your module
+        // 1. Hook into your OWN module (To verify it is active)
         if (lpparam.packageName.equals(CommonUtils.MY_PACKAGE_NAME)) {
             try {
-
                 if (dexKitBridge == null) {
-                    // Load the .so file from your module
                     System.load(moduleLibDir + "/libdexkit.so");
                     XposedBridge.log("libdexkit.so loaded successfully.");
-
-                    // Initialize DexKitBridge with your module's APK (for module-specific tasks, if needed)
                     dexKitBridge = DexKitBridge.create(moduleSourceDir);
-
                     XposedBridge.log("DexKitBridge initialized for InstaEclipse.");
                 }
-
-                // Hook your module
                 hookOwnModule(lpparam);
-
             } catch (Exception e) {
                 XposedBridge.log("(InstaEclipse): Failed to initialize DexKitBridge for InstaEclipse: " + e.getMessage());
             }
         }
 
-        // Hook into Instagram and its clones
-        if (SUPPORTED_PACKAGES.contains(lpparam.packageName)) {
+        // 2. NEW LOGIC: Check if package contains "insta" OR is in the list
+        // toLowerCase() is important so it catches "Insta", "INSTA", and "insta"
+        boolean hasInstaName = lpparam.packageName.toLowerCase().contains("insta");
+        boolean isListed = SUPPORTED_PACKAGES.contains(lpparam.packageName);
+
+        if (hasInstaName || isListed) {
+            
+            // XposedBridge.log("(InstaEclipse): Target Found: " + lpparam.packageName);
+
             try {
                 if (dexKitBridge == null) {
-                    // Load the .so file from your module (if not already loaded)
                     System.load(moduleLibDir + "/libdexkit.so");
-                    // XposedBridge.log("libdexkit.so loaded successfully.");
-
-                    // Initialize DexKitBridge with the target app's APK
                     dexKitBridge = DexKitBridge.create(lpparam.appInfo.sourceDir);
-                    // XposedBridge.log("DexKitBridge initialized with target APK: " + lpparam.appInfo.sourceDir);
                 }
 
                 // Use the target app's ClassLoader
@@ -135,7 +128,6 @@ public class Module implements IXposedHookLoadPackage, IXposedHookZygoteInit {
     private void hookOwnModule(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
             findAndHookMethod(CommonUtils.MY_PACKAGE_NAME + ".MainActivity", lpparam.classLoader, "isModuleActive", XC_MethodReplacement.returnConstant(true));
-            // XposedBridge.log("InstaEclipse | Successfully hooked isModuleActive().");
         } catch (Exception e) {
             XposedBridge.log("(InstaEclipse): Failed to hook MainActivity: " + e.getMessage());
         }
@@ -255,9 +247,7 @@ public class Module implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                     } catch (Throwable ignored) {
                         XposedBridge.log("(InstaEclipse | Interceptor): ❌ Failed to hook");
                     }
-
                 }
-
             });
 
         } catch (Exception e) {
